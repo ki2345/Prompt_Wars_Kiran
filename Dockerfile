@@ -1,17 +1,18 @@
-# Use a light Node.js image
+# 1. Use Node.js to run the server
 FROM node:18-slim
 
-# Create app directory
-WORKDIR /usr/src/app
+# 2. Create the working directory
+WORKDIR /workspace
 
-# Copy all your files from GitHub to the container
+# 3. Copy your game files into the container
 COPY . .
 
-# Install dependencies (if any)
+# 4. Install any needed packages (if you have a package.json)
 RUN npm install --production || true
 
-# Change this to the port your game uses (usually 8080 for Cloud Run)
+# 5. Tell Google Cloud which port to use (8080 is standard)
+ENV PORT=8080
 EXPOSE 8080
 
-# The command to run your game
-CMD [ "node", "server.js" ]
+# 6. Start the game (Change 'server.js' to your main file name)
+CMD ["node", "server.js"]
