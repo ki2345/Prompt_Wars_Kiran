@@ -6,16 +6,13 @@ import {
   Play,
   Trophy,
   Timer,
-  CheckCircle,
-  XCircle,
-  Hash,
   ArrowRight,
   LogOut,
-  Type
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { speak } from './utils/speech';
 
 // Helper for tailwind classes
 function cn(...inputs: ClassValue[]) {
@@ -60,17 +57,23 @@ export default function App() {
       setGameState('PLAYING');
       setRoundTimeLeft(room?.settings?.timer || 60);
       setAnswers({});
+      speak(`The letter is ${letter}`);
     });
 
     socket.on('round_ended', ({ room: updatedRoom, roundSummary }) => {
       setRoom(updatedRoom);
       setLastRoundSummary(roundSummary);
       setGameState('ROUND_RESULTS');
+      speak("Time is up! Ready to go to another round.");
     });
 
     socket.on('game_over', (finalRoom) => {
       setRoom(finalRoom);
       setGameState('GAME_OVER');
+      const winner = [...finalRoom.players].sort((a, b) => b.score - a.score)[0];
+      if (winner) {
+        speak(`Game over! The winner is ${winner.name}`);
+      }
     });
 
     socket.on('error', (msg) => setError(msg));
@@ -99,8 +102,8 @@ export default function App() {
   }, [gameState, roundTimeLeft]);
 
   const handleCreateRoom = () => {
-    if (!playerName) return setError('Please enter your name');
-    socket.emit('create_room', { playerName });
+    const name = playerName || 'Host';
+    socket.emit('create_room', { playerName: name });
   };
 
   const handleJoinRoom = () => {
@@ -141,17 +144,41 @@ export default function App() {
     socket.emit('submit_answers', { roomId: room.id, answers });
   };
 
+  const handleQuit = () => {
+    if (window.confirm("Are you sure you want to quit the game?")) {
+      socket.disconnect();
+      setGameState('LANDING');
+      setRoom(null);
+      setAnswers({});
+      setError('');
+      // Reconnect for next time
+      socket.connect();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 p-4 md:p-8 flex flex-col items-center">
-      <header className="mb-12 text-center">
-        <motion.h1
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-5xl md:text-7xl font-black italic tracking-tighter neon-text-primary mb-2"
-        >
-          CATEGORY CLASH
-        </motion.h1>
-        <p className="text-primary/60 font-medium">The Ultimate Word Elimination Game</p>
+      <header className="mb-12 text-center relative w-full max-w-4xl">
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <motion.h1
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-5xl md:text-7xl font-black italic tracking-tighter neon-text-primary mb-2"
+            >
+              CATEGORY CLASH
+            </motion.h1>
+            <p className="text-primary/60 font-medium">The Ultimate Word Elimination Game</p>
+          </div>
+          {gameState !== 'LANDING' && (
+            <button
+              onClick={handleQuit}
+              className="absolute right-0 top-1/2 -translate-y-1/2 bg-clash/10 hover:bg-clash/20 text-clash border border-clash/30 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all"
+            >
+              <LogOut size={16} /> QUIT
+            </button>
+          )}
+        </div>
       </header>
 
       <AnimatePresence mode="wait">
@@ -186,7 +213,7 @@ export default function App() {
                   onClick={handleCreateRoom}
                   className="w-full bg-primary text-black font-bold p-4 rounded-xl flex items-center justify-center gap-2 hover:shadow-[0_0_20px_#00f6ff] transition-all transform active:scale-95"
                 >
-                  <Play fill="black" size={20} /> HOST GAME
+                  <Play fill="black" size={20} /> CREATE ROOM
                 </button>
 
                 <div className="relative py-4">
@@ -240,13 +267,13 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4 mb-8">
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-white/40 uppercase">Rounds</label>
-                      <div className="flex gap-2">
-                        {[3, 5, 10].map(r => (
+                      <div className="grid grid-cols-5 gap-2">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
                           <button
                             key={r}
                             onClick={() => handleUpdateSettings({ rounds: r })}
                             className={cn(
-                              "flex-1 p-2 rounded-lg font-bold border transition-all",
+                              "p-2 rounded-lg font-bold border transition-all text-xs",
                               room.settings.rounds === r ? "bg-primary text-black border-primary" : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10"
                             )}
                           >
@@ -300,13 +327,14 @@ export default function App() {
                     {CATEGORIES.map(cat => (
                       <button
                         key={cat}
-                        disabled={room.hostId !== socket.id && !room.settings.categories.includes(cat)}
+                        disabled={room.hostId !== socket.id}
                         onClick={() => toggleCategory(cat)}
                         className={cn(
                           "p-2 rounded-xl text-xs font-bold border transition-all",
                           room.settings.categories.includes(cat)
                             ? "bg-secondary border-secondary shadow-[0_0_10px_#ff00e5]"
-                            : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10"
+                            : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10",
+                          room.hostId !== socket.id && "cursor-default opacity-80"
                         )}
                       >
                         {cat}
@@ -316,7 +344,7 @@ export default function App() {
                 </div>
               </div>
 
-              {room.hostId === socket.id && (
+              {room.hostId === socket.id ? (
                 <button
                   onClick={handleStartGame}
                   disabled={room.settings.categories.length !== 4}
@@ -324,6 +352,10 @@ export default function App() {
                 >
                   START MATCH <ArrowRight />
                 </button>
+              ) : (
+                <div className="w-full bg-white/5 border border-white/10 text-white/40 font-black text-xl p-6 rounded-3xl flex items-center justify-center gap-3 italic">
+                  WAITING FOR HOST TO START...
+                </div>
               )}
             </div>
 
@@ -348,6 +380,16 @@ export default function App() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            <div className="md:col-span-12 flex flex-col gap-4 mt-2">
+              <button
+                onClick={handleCreateRoom}
+                className="w-full bg-primary/10 border border-primary/20 text-primary font-bold p-3 rounded-2xl hover:bg-primary/20 transition-all text-xs"
+              >
+                CREATE A NEW ROOM INSTEAD
+              </button>
+
               <div className="bg-primary/5 border border-primary/10 p-4 rounded-3xl text-xs text-primary/60 leading-relaxed italic">
                 Tip: If two players write the same word, both get 0 points! Be creative!
               </div>
@@ -521,15 +563,23 @@ export default function App() {
               ))}
             </div>
 
-            <button
-              onClick={() => window.location.reload()}
-              className="flex items-center gap-3 text-secondary font-black text-xl hover:underline decoration-4 underline-offset-8"
-            >
-              <LogOut /> EXIT TO MAIN MENU
-            </button>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button
+                onClick={handleCreateRoom}
+                className="flex-1 bg-primary text-black font-black p-4 rounded-2xl flex items-center justify-center gap-2 hover:shadow-[0_0_20px_#00f6ff] transition-all active:scale-95"
+              >
+                <Play fill="black" size={20} /> START NEW ROOM
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="flex-1 glass border-white/10 text-white font-bold p-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-white/5 transition-all active:scale-95"
+              >
+                <LogOut size={20} /> EXIT TO MENU
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </div >
   );
 }

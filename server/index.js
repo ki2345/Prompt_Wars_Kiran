@@ -99,10 +99,10 @@ io.on('connection', (socket) => {
         room.submissions[room.currentRound] = {};
       }
       room.submissions[room.currentRound][socket.id] = answers;
-      
+
       const playersInRoom = room.players.length;
       const submissionsCount = Object.keys(room.submissions[room.currentRound]).length;
-      
+
       io.to(roomId).emit('player_submitted', { playerId: socket.id });
 
       if (submissionsCount === playersInRoom) {
@@ -146,7 +146,7 @@ function startNextRound(roomId) {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   room.currentLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
   room.gameState = 'PLAYING';
-  
+
   io.to(roomId).emit('round_started', {
     round: room.currentRound,
     letter: room.currentLetter,
@@ -179,7 +179,7 @@ function processRoundResults(roomId) {
     room.players.forEach(player => {
       const answer = (roundSubmissions[player.id]?.[cat] || '').trim().toLowerCase();
       const isValid = answer.length > 0 && answer[0].toUpperCase() === room.currentLetter;
-      
+
       if (!isValid) {
         playerResults.push({ playerId: player.id, playerName: player.name, answer: answer || '(Empty)', points: 0, status: 'invalid' });
       } else {
@@ -196,11 +196,11 @@ function processRoundResults(roomId) {
       const status = playerIds.length === 1 ? 'unique' : 'clash';
       playerIds.forEach(pId => {
         const player = room.players.find(p => p.id === pId);
-        playerResults.push({ 
-          playerId: pId, 
-          playerName: player.name, 
-          answer: answer, 
-          points: points, 
+        playerResults.push({
+          playerId: pId,
+          playerName: player.name,
+          answer: answer,
+          points: points,
           status: status,
           clashedWith: playerIds.length > 1 ? playerIds.filter(id => id !== pId).map(id => room.players.find(p => p.id === id).name) : []
         });
@@ -212,9 +212,9 @@ function processRoundResults(roomId) {
   });
 
   room.roundResults.push({ round: room.currentRound, summary: roundSummary });
-  io.to(roomId).emit('round_ended', { 
-    room: room, 
-    roundSummary: roundSummary 
+  io.to(roomId).emit('round_ended', {
+    room: room,
+    roundSummary: roundSummary
   });
 
   // Wait 10 seconds before next round or game over
@@ -223,7 +223,7 @@ function processRoundResults(roomId) {
   }, 10000);
 }
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
